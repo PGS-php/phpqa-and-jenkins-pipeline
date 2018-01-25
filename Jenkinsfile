@@ -1,4 +1,4 @@
-String path = 'src/'
+String[] pathArray = ["src/"]
 
 node('docker') {
     ansiColor('xterm') {
@@ -17,38 +17,50 @@ node('docker') {
         }
 
         stage('Install dependencies') {
-            dockerRunTest('composer install --ignore-platform-reqs --no-scripts --no-progress --no-suggest')
+            phpQa('composer install --ignore-platform-reqs --no-scripts --no-progress --no-suggest')
         }
 
         stage("Testing") {
             parallel (
                 "PHPCodeSniffer": {
-                    dockerRunTest('phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --encoding=UTF-8 --ignore="*.js" ' + path + ' || exit 0')
+                    pathArray.each { path ->
+                        phpQa('phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --encoding=UTF-8 --ignore="*.js" ' + path + ' || exit 0')
+                    }
                     replaceFilePath('build/logs/checkstyle.xml')
                     checkstyle pattern: 'build/logs/checkstyle.xml'
                 },
 
                 "PHPStan": {
-                    dockerRunTest('phpstan analyse ' + path + ' || exit 0')
+                    pathArray.each { path ->
+                        phpQa('phpstan analyse ' + path + ' || exit 0')
+                    }
                 },
 
                 "PhpMetrics": {
-                    dockerRunTest('phpmetrics --report-html=build/logs/phpmetrics.html ' + path + ' || exit 0')
+                    pathArray.each { path ->
+                        phpQa('phpmetrics --report-html=build/logs/phpmetrics.html ' + path + ' || exit 0')
+                    }
                     publishHTMLReport('build/logs', 'phpmetrics.html', 'PHPMetrics')
                 },
 
                 "PHPMessDetector": {
-                    dockerRunTest('phpmd ' + path + ' xml cleancode,codesize,unusedcode --reportfile build/logs/pmd.xml || exit 0')
+                    pathArray.each { path ->
+                        phpQa('phpmd ' + path + ' xml cleancode,codesize,unusedcode --reportfile build/logs/pmd.xml || exit 0')
+                    }
                     replaceFilePath('build/logs/pmd.xml')
                     pmd canRunOnFailed: true, pattern: 'build/logs/pmd.xml'
                 },
 
                 "PHPMagicNumberDetector": {
-                    dockerRunTest('phpmnd ' + path + ' --exclude=tests --progress --non-zero-exit-on-violation --ignore-strings=return,condition,switch_case,default_parameter,operation || exit 0')
+                    pathArray.each { path ->
+                        phpQa('phpmnd ' + path + ' --exclude=tests --progress --non-zero-exit-on-violation --ignore-strings=return,condition,switch_case,default_parameter,operation || exit 0')
+                    }
                 },
 
                 "PHPCopyPasteDetector": {
-                    dockerRunTest('phpcpd --log-pmd build/logs/pmd-cpd.xml ' + path + ' || exit 0')
+                    pathArray.each { path ->
+                        phpQa('phpcpd --log-pmd build/logs/pmd-cpd.xml ' + path + ' || exit 0')
+                    }
                     replaceFilePath('build/logs/pmd-cpd.xml')
                     dry canRunOnFailed: true, pattern: 'build/logs/pmd-cpd.xml'
                 }
@@ -74,7 +86,7 @@ def publishHTMLReport(reportDir, file, reportName) {
     }
 }
 
-def dockerRunTest(attribute) {
+def phpQa(attribute) {
     sh 'docker run --rm -v $(pwd):/project -w /project jakzal/phpqa ' + attribute
 }
 
