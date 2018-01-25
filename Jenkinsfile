@@ -12,6 +12,7 @@ node('docker') {
         }
 
         stage('Prepare directory') {
+            phpQa('chmod -R 777 build')
             sh 'rm -rf build/logs'
             sh 'mkdir -p build/logs'
         }
